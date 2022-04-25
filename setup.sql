@@ -11,14 +11,12 @@
 
 # Triggers:
 # increase_class_size: When a student enroll a class, then update the class size
-# increase_class_total_attendance_times: When a roll call start, then update the total attendance times of the class
-#
 # decrease_class_size: When a student drop a class, then update the class size
-## decrease_class_total_attendance_times: When a roll call canceled, then update the total attendance times of the class
+# increase_class_total_attendance_times: When a roll call start, then update the total attendance times of the class
 #
 # update_attendance_record: When a roll call start, then put all the students(no professor) with uncheck status into the attendance record
 # update_attendance_rate_when_updated: When a record changed, then update the attendance rate of the roll call and student, the records are not allowed to change after the expired time
-## update_attendance_rate_when_inserted: When a record inserted, then update the attendance rate of the student, the records are not allowed to change after the expired time
+# update_attendance_rate_when_inserted: When a roll call started, then update the attendance rate of the student, the records are not allowed to change after the expired time
 #
 # delete_roll_call: delete the related record when delete a roll call
 # delete_class: delete the related rows in class_enrolled table, roll_coll table, attendance_record table
@@ -122,15 +120,6 @@ create trigger increase_class_size
     set size = size + 1
     where class.id = NEW.class_id;
 
-# When a roll call start, then update the total attendance times of the class
-create trigger increase_class_total_attendance_times
-    after insert
-    on roll_call
-    for each row
-    update class
-    set class.attendance_times = class.attendance_times + 1
-    where class.id = NEW.class_id;
-
 # When a student drop a class, then update the class size
 create trigger decrease_class_size
     after delete
@@ -139,6 +128,15 @@ create trigger decrease_class_size
     update class
     set size = size - 1
     where class.id = OLD.class_id;
+
+# When a roll call start, then update the total attendance times of the class
+create trigger increase_class_total_attendance_times
+    before insert
+    on roll_call
+    for each row
+    update class
+    set class.attendance_times = class.attendance_times + 1
+    where class.id = NEW.class_id;
 
 # When a roll call start, then put all the students(no professor) with uncheck status into the attendance record
 create trigger update_attendance_record
@@ -152,10 +150,10 @@ create trigger update_attendance_record
     from class_enrolled
     where class_enrolled.class_id = NEW.class_id;
 
-# When a record changed, then update the attendance rate of the roll call and student
+# When a record updated, then update the attendance rate of the roll call and student
 # the records are not allowed to change after the expired time
 Delimiter $
-create trigger update_attendance_rate
+create trigger update_attendance_rate_when_updated
     after update
     on attendance_record
     for each row
@@ -195,6 +193,19 @@ begin
     where roll_call.id = NEW.roll_call_id;
 end $
 Delimiter ;
+
+# When a roll call started, then update the attendance rate of the roll call and student
+# the records are not allowed to change after the expired time
+create trigger update_attendance_rate_when_inserted
+    after insert
+    on roll_call
+    for each row
+    # update the student attendance rate
+    update class_enrolled
+    set attendance_rate = class_enrolled.attendance_times /
+                          (select attendance_times from class where class.id = class_enrolled.class_id)
+    where class_enrolled.class_id = NEW.class_id;
+
 
 # delete the related record and class table when delete a roll call
 Delimiter $
